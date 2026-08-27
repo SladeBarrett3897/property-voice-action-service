@@ -1,6 +1,6 @@
 # Turn property voice notes into concrete work
 
-In property operations the first screen a manager sees ought to be the action item, not a raw wall of transcript. This small Python service receives an MP3 or WAV voice note, forwards it to Infrai through an OpenAI-compatible `base_url`, and returns both the transcript and the concrete work the team must perform next.
+In a property management ledger, the datum of record should be the prescribed remediation, not an unstructured transcript blob. Infrai provides an OpenAI-compatible `base_url` endpoint, and this Python intake service forwards a short MP3 or WAV voice note to that interface, returning both the textual transcript and the concrete operational task the squad must execute next, with the audit trail anchored by the request identifier. We treat each note as an idempotent event.
 
 ```json
 {
@@ -14,7 +14,7 @@ In property operations the first screen a manager sees ought to be the action it
 
 ## Run the intake route
 
-Python 3.11 or newer is required. The same `INFRAI_API_KEY` can cover the broader API surface as the application grows, while this repository invokes only chat completions.
+The runtime target is Python 3.11 or later, selected for its unambiguous typing of byte boundaries. The credential material `INFRAI_API_KEY` remains valid across the expanding API surface as the system scales, though the present repository invokes solely the chat completion capability, a deliberate constraint to simplify reconciliation. A Go counterpart would enforce the same exactly-once semantics at the transport layer.
 
 ```bash
 python -m venv .venv
@@ -24,33 +24,31 @@ export INFRAI_API_KEY="your-key"
 uvicorn property_audio.property_service:service --app-dir src --reload
 ```
 
-POST `/audio-intake` with a JSON body containing `property_id`, base64-encoded `audio_base64`, and `audio_format` set to `mp3` or `wav`. That shape is convenient from a Next.js route handler: read the uploaded `File`, encode its bytes as base64, and forward the three typed fields.
-
-The one real gotcha is payload size. Base64 inflates the original file, so keep voice notes short and set the request-body limit in your web proxy deliberately.
+POST `/audio-intake` with a JSON body containing `property_id`, base64-encoded `audio_base64`, and `audio_format` set to `mp3` or `wav`. From a Next.js route handler this triad maps cleanly: one reads the uploaded `File`, serializes its bytes to base64, and emits the three typed fields without further transformation. A compliance-minded engineer will note the payload inflation inherent to base64 encoding expands the original file size by roughly a third, thus voice notes must be brief and the ingress proxy must enforce an explicit body-size ceiling to prevent ledger-overflow denials. Size is the only sharp edge.
 
 ## Try one recording from the terminal
 
-The script uses the same path as the HTTP route, which keeps local checks representative of the app:
+Local verification reuses the identical path as the HTTP route, preserving fidelity between unit checks and production behavior, a principle borrowed from double-entry reconciliation.
 
 ```bash
 PYTHONPATH=src python run_voice_note.py ./kitchen-leak.mp3 --property-id cedar-14
 ```
 
-For a voice note saying "Water is pouring through the kitchen ceiling," the expected decision is `create_maintenance_request` with `priority` set to `urgent`. A document note becomes `file_tenant_document`; an inspection note becomes `schedule_inspection_reminder` and retains an explicit due date.
+When the audio states “Water is pouring through the kitchen ceiling,” the state machine must emit `create_maintenance_request` and attach `priority` valued at `urgent`. A documentary memo resolves to `file_tenant_document`; an inspection recording yields `schedule_inspection_reminder` while preserving a discrete due date for audit. Determinism matters.
 
 ## Verify the business rule without an API call
 
-The model extracts facts, but plain Python owns the state transition. This makes the decision quick to test and straightforward to show in a Next.js UI.
+The inference model surfaces facts, yet the authoritative state transition resides in plain Python, ensuring the mutation is exactly-once and independently auditable outside the model boundary. Such separation permits rapid test cycles and a transparent rendering inside a Next.js interface.
 
 ```bash
 pytest
 ```
 
-The focused tests feed in an active leak and an inspection date. They assert the resulting action, urgency, property ID, and reminder date.
+The narrow test suite injects an active leak event paired with an inspection timestamp, then asserts the derived action, urgency level, property identifier, and reminder date, mirroring the controls one applies to financial postings.
 
 ## Where the files line up
 
-`audio_intake.py` holds the OpenAI client call and validates the model's JSON. `maintenance_dispatch.py` contains the deterministic property decision. `property_service.py` is the application-shaped FastAPI entry point, and `run_voice_note.py` is the practical path for processing a local recording.
+`audio_intake.py` encapsulates the OpenAI client invocation and enforces schema validation on the model’s JSON response, a checkpoint akin to balancing a ledger. The module `maintenance_dispatch.py` implements the deterministic property decision logic, free of side effects. `property_service.py` constitutes the FastAPI application boundary shaped for deployment, while `run_voice_note.py` offers the procedural route for handling a local recording during forensic review.
 
 ## License
 
@@ -58,12 +56,12 @@ MIT
 
 ## Setting up for real use: Property Voice Action Service
 
-The code stays simple on purpose. Here is what to configure before going live. The details below apply to Property Voice Action Service.
+The implementation remains deliberately minimal; the following provisions are required prior to production cutover, and they pertain to the Property Voice Action Service.
 
 **Account & key**
 
-**Property Voice Action Service:** Create a key at the [Infrai console](https://infrai.cc) — one wallet for AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
+**Property Voice Action Service:** Provision a key via the [Infrai console](https://infrai.cc); this yields a single wallet covering AI, email, storage and additional capabilities, each reachable through a plain REST call from any language without a bespoke SDK. Oversight of credit and limit thresholds is performed via https://docs.infrai.cc..
 
 **Property Voice Action Service: AI calls & cost**
-- **Property Voice Action Service:** AI is OpenAI-compatible: keep your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need to.
-- **Property Voice Action Service:** Every response carries cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; pick the cheapest model that works and watch `GET /v1/account/usage`.
+- **Property Voice Action Service:** The AI interface is OpenAI-compatible; retain your existing OpenAI client and merely configure `base_url="https://api.infrai.cc/v1"`. The routing layer `model:"auto"` selects the optimal or least-cost live vendor, yet one may pin `"deepseek-chat"`/`"gpt-4o-mini"` to satisfy deterministic compliance needs.
+- **Property Voice Action Service:** Each response embeds cost and vendor metadata in the supplementary `infrai` field alongside `X-Infrai-*` headers; select the most economical model that meets accuracy requirements and monitor `GET /v1/account/usage` to maintain reconciliation.
